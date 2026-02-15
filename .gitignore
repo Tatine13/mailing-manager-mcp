@@ -57,8 +57,13 @@ tunnel.log
 *.js
 *.cjs
 !src/**/*.ts
-!tests/**/*.ts
+!tests/unit/**/*.ts
 !vitest.config.ts
 !tsconfig.json
 !tsup.config.ts
 !verify_key.ts
+
+# Ignore scratch scripts in tests folder
+tests/*.ts
+tests/*.js
+tests/*.cjs
