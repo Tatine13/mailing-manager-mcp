@@ -1,451 +1,134 @@
-# 📧 Mailing Manager MCP - (NB: pour publier sur fkom13 ou Tatine13 je sais pas encore)
+# 🏗️ Architecture & Technical Reference - Mailing Manager MCP
 
-<div align="center">
-
-[![npm version](https://badge.fury.io/js/@mailing-ai%2Fmcp-manager.svg)](https://badge.fury.io/js/@mailing-ai/mcp-manager)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Node.js Version](https://img.shields.io/node/v/@mailing-ai/mcp-manager.svg)](https://nodejs.org)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.7-blue.svg)](https://www.typescriptlang.org/)
-
-**Enterprise-grade Multi-Account Email Management powered by Model Context Protocol**
-
-[Features](#-features) • [Installation](#-installation) • [Configuration](#-configuration) • [Tools](#-available-tools) • [Security](#-security)
-
-</div>
+Mailing Manager MCP is built with an enterprise-grade modular architecture, prioritizing security, performance, and total observability. This document provides deep technical insights into the server's internals.
 
 ---
 
-## 📋 Overview
+## 🧩 System Architecture
 
-Mailing Manager MCP is a secure, extensible MCP (Model Context Protocol) server that enables AI assistants like Claude and Cursor to manage multiple email accounts with advanced features:
-
-- 🎭 **AI Personas** - Define communication styles and behaviors
-- 📋 **Directives** - Contextual automation rules for emails
-- ⚙️ **Task Scheduling** - Cron-based automated workflows
-- 🔗 **Webhooks** - Inbound/outbound event integration
-- 🔐 **Enterprise Security** - AES-256-GCM encryption with Argon2
-
----
-
-## ✨ Features
-
-### 🔐 Ultra-Secure Architecture
-| Feature | Implementation |
-|---------|---------------|
-| **Encryption** | AES-256-GCM for all credentials |
-| **Key Derivation** | Argon2id (memory: 64MB, iterations: 3) |
-| **Master Password** | Never stored, only hashed |
-| **OAuth2 Tokens** | Encrypted with unique IVs |
-| **OS Keychain** | Optional integration (macOS/Windows/Linux) |
-
-### 📬 Multi-Account Support
-- **Unlimited email accounts**
-- **Provider Presets**: Gmail, Outlook, Yahoo, iCloud, Fastmail, Custom
-- **Authentication Methods**: OAuth2, App Passwords, Password
-- **Protocols**: IMAP, SMTP with TLS
-
-### 🎭 AI Personas System
-Define how your AI assistant communicates:
-```typescript
-{
-  name: "Professional",
-  tone: "formal",           // professional | casual | formal | friendly
-  style: "concise",         // concise | detailed | bullet-points
-  signature: "Best regards,\nJohn Doe",
-  responseTime: "within-hour"
-}
-```
-
-### 📋 Directives Engine
-Create conditional automation rules:
-```typescript
-{
-  name: "Priority Boss Emails",
-  trigger: {
-    conditions: [
-      { field: "sender", operator: "contains", value: "boss@company.com" }
-    ]
-  },
-  actions: [
-    { type: "flag", parameters: { flag: "urgent" } }
-  ]
-}
-```
-
-### ⚙️ Task Automation
-Schedule complex workflows:
-```typescript
-{
-  name: "Daily Digest",
-  schedule: { type: "cron", value: "0 9 * * *" },  // Every day at 9 AM
-  type: "digest_generation"
-}
-```
-
-### 🔗 Webhooks
-- **Inbound**: Receive events from external services
-- **Outbound**: Send notifications to Slack, Zapier, n8n, Make
-- **Security**: HMAC signature verification, rate limiting, replay protection
-
----
-
-## 🚀 Installation
-
-### Via npm (Recommended)
-```bash
-npm install -g @mailing-ai/mcp-manager
-```
-
-### First-Time Setup
-```bash
-mailing-manager setup
-```
-
-This opens a secure browser form to:
-1. Create your master password
-2. Initialize the encrypted database
-3. Add your first email account
-
----
-
-## ⚙️ Configuration
-
-### For Claude Desktop
-
-Add to your Claude Desktop configuration file:
-
-**macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
-**Windows**: `%APPDATA%/Claude/claude_desktop_config.json`
-
-```json
-{
-  "mcpServers": {
-    "mailing-manager": {
-      "command": "npx",
-      "args": ["@mailing-ai/mcp-manager", "server"],
-      "env": {
-        "MAILING_MANAGER_DATA_DIR": "~/.mailing-manager",
-        "LOG_LEVEL": "info"
-      }
-    }
-  }
-}
-```
-
-### For Cursor IDE
-
-Add to `.cursor/mcp.json`:
-
-```json
-{
-  "mcpServers": {
-    "mailing-manager": {
-      "command": "npx",
-      "args": ["@mailing-ai/mcp-manager", "server"],
-      "env": {
-        "MAILING_MANAGER_DATA_DIR": "~/.mailing-manager"
-      }
-    }
-  }
-}
-```
-
-### For Other MCP Clients
-
-```bash
-# Start the MCP server
-mailing-manager server
-
-# Or with HTTP transport
-mailing-manager server --transport http
-
-# Or both transports
-mailing-manager server --transport both
-```
-
----
-
-## 🛠️ Available Tools
-
-### Account Management
-| Tool | Description |
-|------|-------------|
-| `add_account` | Add a new email account (opens secure browser form) |
-| `list_accounts` | List all configured accounts |
-| `remove_account` | Remove an account and its data |
-| `test_connection` | Verify account connectivity |
-
-### Email Operations
-| Tool | Description |
-|------|-------------|
-| `list_emails` | List emails in a folder with pagination |
-| `read_email` | Read full email content |
-| `send_email` | Send emails with attachments and CC/BCC |
-| `search_emails` | Advanced search with filters |
-| `move_email` | Move emails between folders |
-| `delete_email` | Delete emails |
-| `flag_email` | Star or flag emails |
-
-### Personas
-| Tool | Description |
-|------|-------------|
-| `create_persona` | Create a new AI persona |
-| `list_personas` | List all personas |
-| `update_persona` | Modify persona settings |
-| `delete_persona` | Remove a persona |
-
-### Directives
-| Tool | Description |
-|------|-------------|
-| `create_directive` | Create automation directive |
-| `list_directives` | List all directives |
-| `test_directive` | Test directive against an email |
-
-### Tasks
-| Tool | Description |
-|------|-------------|
-| `create_task` | Create scheduled task |
-| `list_tasks` | List all tasks |
-| `execute_task` | Run a task manually |
-| `pause_task` / `resume_task` | Control task execution |
-
-### Webhooks
-| Tool | Description |
-|------|-------------|
-| `create_inbound_webhook` | Create webhook endpoint |
-| `create_outbound_webhook` | Set up event notifications |
-| `list_webhooks` | List all webhooks |
-| `webhook_logs` | View execution history |
-
----
-
-## 🔒 Security
-
-### Encryption Details
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    SECURITY ARCHITECTURE                     │
-├─────────────────────────────────────────────────────────────┤
-│                                                              │
-│  Master Password (User Input)                                │
-│         │                                                    │
-│         ▼                                                    │
-│  ┌─────────────────┐                                        │
-│  │   Argon2id      │  Time: 3 iterations                    │
-│  │   Key Derivation│  Memory: 64 MB                         │
-│  └────────┬────────┘  Parallelism: 4                        │
-│           │                                                  │
-│           ▼                                                  │
-│  ┌─────────────────┐                                        │
-│  │   256-bit Key   │  Used for all encryption               │
-│  └────────┬────────┘                                        │
-│           │                                                  │
-│           ▼                                                  │
-│  ┌─────────────────┐                                        │
-│  │  AES-256-GCM    │  Each value: unique IV + auth tag      │
-│  │  Encryption     │                                        │
-│  └─────────────────┘                                        │
-│                                                              │
-└─────────────────────────────────────────────────────────────┘
-```
-
-### Zero-Trust Design
-- ✅ No credentials stored in plaintext
-- ✅ Master password never written to disk
-- ✅ Each encrypted value uses a unique IV
-- ✅ OAuth tokens encrypted separately
-- ✅ Database fields encrypted at rest
-
----
-
-## 🏗️ Architecture
+The server is divided into specialized managers, each handling a specific domain of the email lifecycle:
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│                   MCP Client                         │
-│              (Claude / Cursor / Other)               │
-└──────────────────┬──────────────────────────────────┘
-                   │ MCP Protocol (stdio/http)
-┌──────────────────▼──────────────────────────────────┐
-│              Mailing Manager Server                  │
-├──────────────────────────────────────────────────────┤
+│                   MCP INTERFACE (stdio/http)         │
+├─────────────────────────────────────────────────────┤
 │  ┌──────────┐  ┌──────────┐  ┌──────────┐          │
 │  │ Account  │  │  Email   │  │ Persona  │          │
 │  │ Manager  │  │  Client  │  │ Manager  │          │
-│  └──────────┘  └──────────┘  └──────────┘          │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐          │
+│  └────┬─────┘  └────┬─────┘  └────┬─────┘          │
+│       │             │             │                │
+│  ┌────▼─────────────▼─────────────▼─────┐          │
+│  │        SECURITY & ENCRYPTION         │          │
+│  │      (Argon2id + AES-256-GCM)        │          │
+│  └────┬───────────────────────────┬─────┘          │
+│       │                           │                │
+│  ┌────▼───────────┐         ┌─────▼───────────┐    │
+│  │ SQLite Storage │         │    Event Bus    │    │
+│  │ (FTS5 Memory)  │         │ (Internal Hooks)│    │
+│  └────────────────┘         └─────┬───────────┘    │
+│                                   │                │
+│  ┌──────────┐  ┌──────────┐  ┌────▼─────┐          │
 │  │Directive │  │   Task   │  │ Webhook  │          │
 │  │ Engine   │  │  Engine  │  │ Manager  │          │
 │  └──────────┘  └──────────┘  └──────────┘          │
-│  ┌──────────────────────────────────────┐          │
-│  │        Security & Encryption         │          │
-│  └──────────────────────────────────────┘          │
-└──────────────────┬──────────────────────────────────┘
-                   │
-    ┌──────────────┼──────────────┐
-    ▼              ▼              ▼
-┌─────────┐  ┌─────────┐  ┌─────────┐
-│  IMAP   │  │  SMTP   │  │ OAuth2  │
-│ Servers │  │ Servers │  │Providers│
-└─────────┘  └─────────┘  └─────────┘
+└─────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 📖 Usage Examples
+## 📊 Data & Memory Strategy
 
-### Natural Language with Claude/Cursor
+### FTS5 Local Search Memory
+To optimize AI token usage and speed, the server utilizes **SQLite FTS5 (Full-Text Search)**.
+- **Table**: `email_search`
+- **Columns**: `message_id`, `account_id`, `folder`, `sender`, `recipients`, `subject`, `body_text`, `attachments`, `date`.
+- **Optimization**: Body text is stripped of HTML and raw headers before indexing.
+- **Delta Sync**: Incremental logic that fetches newest emails first and stops at the last known UID.
 
-Once configured, interact with your emails naturally:
-
-```
-"Check my Gmail inbox for unread emails from last week"
-
-"Send an email to john@company.com about the project update"
-
-"Create a professional persona for business communications"
-
-"Set up a task to archive old emails every Monday at 9 AM"
-
-"Show me emails from my boss that are flagged as urgent"
-```
-
-### Supported Email Providers
-
-| Provider | Auth Methods | Notes |
-|----------|-------------|-------|
-| **Gmail** | OAuth2, App Password | Basic auth deprecated |
-| **Outlook / Microsoft 365** | OAuth2 | Basic auth deprecated since Oct 2022 |
-| **Yahoo Mail** | App Password | Requires app-specific password |
-| **iCloud Mail** | App Password | Requires app-specific password |
-| **Fastmail** | Password, App Password | Standard password supported |
-| **Custom IMAP/SMTP** | Password | Self-hosted servers |
+### 📜 360° Activity Journal
+Total transparency is achieved through the `email_activity_log` table, recording every interaction:
+- **Actions**: `read`, `sent`, `sync`, `download`, `move`, `delete`, `task_start`, `task_complete`, `task_failed`.
+- **Metadata**: Timestamps, associated Account IDs, Message IDs, and result details.
 
 ---
 
-## 🧪 Development
+## 🔐 Security Reference
 
-### Prerequisites
-- Node.js >= 18
-- npm >= 9
+### Encryption Pipeline
+1.  **Key Derivation**: User's `MASTER_KEY` is processed via **Argon2id** (3 iterations, 64MB memory) to generate a 256-bit derived key.
+2.  **Storage**: Credentials (passwords, tokens) are never stored in plain text.
+3.  **Cipher**: **AES-256-GCM** provides both confidentiality and authenticity. Each entry has a unique 12-byte IV and a 16-byte authentication tag.
 
-### Setup
-```bash
-# Clone the repository
-git clone https://github.com/your-org/mailing-manager-mcp.git
-cd mailing-manager-mcp
-
-# Install dependencies
-npm install
-
-# Run in development mode
-npm run dev
-
-# Run tests
-npm test
-
-# Build
-npm run build
-```
-
-### Project Structure
-```
-mailing-manager-mcp/
-├── src/
-│   ├── bin/              # CLI and server entry points
-│   ├── core/             # Core server and types
-│   ├── auth/             # OAuth2 providers
-│   ├── email/            # IMAP/SMTP clients
-│   ├── accounts/         # Account management
-│   ├── personas/         # Persona system
-│   ├── directives/       # Automation directives
-│   ├── tasks/            # Task engine
-│   ├── webhooks/         # Webhook system
-│   ├── security/         # Encryption layer
-│   ├── storage/          # Database layer
-│   └── tools/            # MCP tool implementations
-├── tests/                # Test suites
-├── migrations/           # Database migrations
-└── config/               # Configuration templates
-```
+### Secure Handshake
+The `SecureInput` module launches an ephemeral HTTP/S server for sensitive entries. 
+- **Keys**: Ephemeral ECDH (P-256) keys are generated for every session to encrypt data between the browser and the MCP server.
+- **Protection**: CSRF protection and strictly enforced CSP headers.
 
 ---
 
-## 📝 Configuration Reference
+## ⚙️ Environment Variables (.env)
 
-### Environment Variables
+The server behavior can be entirely controlled via environment variables:
 
 | Variable | Description | Default |
-|----------|-------------|---------|
-| `MAILING_MANAGER_DATA_DIR` | Data directory path | `~/.mailing-manager` |
-| `LOG_LEVEL` | Logging level | `info` |
-| `REMOTE_MODE` | Enable remote secure input | `false` |
+| :--- | :--- | :--- |
+| `MAILING_MANAGER_UNLOCK_CODE` | Master password to unlock the vault (preferred name). | - |
+| `MAILING_MANAGER_MASTER_KEY` | Legacy alias for the master password. | - |
+| `MAILING_MANAGER_DATA_DIR` | Path to the storage directory. | `~/.mailing-manager` |
+| `MAILING_MANAGER_SYNC_LIMIT` | Max emails per sync session (Cap: 100). | `20` |
+| `MAILING_MANAGER_AUTO_SYNC_ON_LOAD`| Automatically sync active accounts on startup. | `false` |
+| `MAILING_MANAGER_WEBHOOK_ENABLED` | Enable the inbound/outbound webhook system. | `true` |
+| `MAILING_MANAGER_WEBHOOK_PORT` | Port for the inbound webhook server. | `3100` |
+| `MAILING_MANAGER_WEBHOOK_HOST` | Host for the inbound webhook server. | `localhost` |
+| `MAILING_MANAGER_HTTP_PORT` | Port for the management API (if enabled). | `3000` |
+| `MAILING_MANAGER_HTTP_HOST` | Host for the management API. | `localhost` |
+| `LOG_LEVEL` | Logging verbosity (`trace`, `debug`, `info`, `warn`, `error`).| `info` |
+| `REMOTE_MODE` | Force remote interactive mode (Pinggy/SSH tunnels). | `false` |
 
-### Config File (`~/.mailing-manager/config.json`)
+---
 
-```json
-{
-  "webhooks": {
-    "enabled": true,
-    "port": 3100,
-    "security": {
-      "signatureValidation": true,
-      "replayProtection": true
-    }
-  },
-  "tasks": {
-    "schedulerEnabled": true,
-    "maxConcurrent": 5
-  },
-  "security": {
-    "autoLockTimeoutMinutes": 30
-  }
-}
+## 🔗 Internal Event Bus (Functional Hooks)
+
+The `EventBus` facilitates real-time reactions to system events. These can be mapped to **Outbound Webhooks**:
+
+- `email.received`: Triggered after a successful sync/fetch of a new message.
+- `email.sent`: Logged after an email is dispatched.
+- `email.deleted` / `email.moved`: Standard management hooks.
+- `task.completed`: Emitted when a scheduled task finishes its run.
+- `task.failed`: Contains the error message for debugging.
+- `directive.triggered`: Emitted when an automation rule matches an email.
+- `account.error`: For real-time monitoring of IMAP/SMTP connection issues.
+
+---
+
+## 📁 Project Structure
+
+```
+mailing-manager-mcp/
+├── dist/                 # Compiled JavaScript (Production)
+├── migrations/           # SQLite Database migrations (Initial & Activity Log)
+├── src/
+│   ├── core/             # Server logic, Config manager, and Type definitions
+│   ├── storage/          # Database manager and FTS5 logic
+│   ├── security/         # Argon2 and AES encryption service
+│   ├── email/            # IMAP/SMTP clients and Connection pooling
+│   ├── accounts/         # Account management and Sync service
+│   ├── tasks/            # Croner-based Task engine
+│   ├── personas/         # AI Persona behavioral engine
+│   ├── webhooks/         # Inbound server and Outbound dispatcher
+│   ├── secure-input/     # Browser-based ephemeral security portal
+│   └── tools/            # MCP Tool registration and implementations
+└── tests/                # Unit and Integration test suites
 ```
 
 ---
 
-## 🤝 Contributing
-
-Contributions are welcome! Please:
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'feat: add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines.
+## 🚀 Publication Note
+This project is officially maintained by **Tatine13**.
+Repository: `https://github.com/Tatine13/mailing-manager-mcp`
+NPM: `@tatine13/mcp-manager`
 
 ---
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
----
-
-## 🙏 Acknowledgments
-
-- [Model Context Protocol](https://modelcontextprotocol.io) - The foundation for AI assistant integration
-- [ImapFlow](https://github.com/postalsys/imapflow) - Modern IMAP client library
-- [Nodemailer](https://nodemailer.com) - SMTP client for Node.js
-- [node-argon2](https://github.com/ranisalt/node-argon2) - Secure password hashing
-
----
-
-## 📞 Support
-
-- **GitHub Issues**: [Report bugs](https://github.com/your-org/mailing-manager-mcp/issues)
-- **Discord**: [Join community](https://discord.gg/mailing-manager)
-
----
-
 <div align="center">
-
-**Made with ❤️ for the AI-powered future of email management**
-
-[⬆ Back to Top](#-mailing-manager-mcp)
-
+**Mailing Manager MCP - The Blueprint for AI Email Orchestration**
 </div>

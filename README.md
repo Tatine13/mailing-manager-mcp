@@ -2,7 +2,7 @@
 
 <div align="center">
 
-[![npm version](https://badge.fury.io/js/@mailing-ai%2Fmcp-manager.svg)](https://badge.fury.io/js/@mailing-ai/mcp-manager)
+[![npm version](https://badge.fury.io/js/@tatine13%2Fmcp-manager.svg)](https://badge.fury.io/js/@tatine13/mcp-manager)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Model Context Protocol](https://img.shields.io/badge/MCP-Protocol-blue.svg)](https://modelcontextprotocol.io)
 
@@ -84,8 +84,8 @@ Add this to your `settings.json`:
 {
   "mcpServers": {
     "mailing-manager": {
-      "command": "node",
-      "args": ["/path/to/dist/bin/server.js"],
+      "command": "npx",
+      "args": ["@tatine13/mcp-manager", "server"],
       "env": {
         "MAILING_MANAGER_UNLOCK_CODE": "your-secure-password",
         "MAILING_MANAGER_SYNC_LIMIT": "50",

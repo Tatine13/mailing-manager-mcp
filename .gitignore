@@ -5,6 +5,9 @@ node_modules/
 dist/
 *.tsbuildinfo
 
+# Internal Documentation Dev directory
+docs/dev/
+
 # Debug logs
 *.log
 npm-debug.log*

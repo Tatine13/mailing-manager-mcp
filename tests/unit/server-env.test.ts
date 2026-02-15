@@ -46,15 +46,16 @@ describe('Server Authentication via Env', () => {
     await server.stop();
   });
 
-  it('should fallback to interactive setup if env var is missing', async () => {
+  it('should stay locked and NOT call interactive setup in stdio mode if env var is missing', async () => {
     // Ensure env var is missing
     delete process.env.MAILING_MANAGER_MASTER_KEY;
 
     const server = new MailingManagerServer(tmpDir);
+    // Transport is stdio by default in DEFAULT_CONFIG
     await server.initialize();
 
-    // Check that interactive setup WAS called
-    expect(masterKeySetupMock).toHaveBeenCalled();
+    // Check that interactive setup was NOT called (to avoid blocking the AI)
+    expect(masterKeySetupMock).not.toHaveBeenCalled();
 
     await server.stop();
   });
