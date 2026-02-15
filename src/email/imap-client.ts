@@ -1,6 +1,7 @@
 import { ImapFlow } from 'imapflow';
 import { Account, EmailMessage, EmailSearchCriteria, EmailFolder, EmailAddress, EmailAttachment } from '../core/types.js';
 import { getLogger } from '../utils/logger.js';
+import { EmailDecoder } from '../utils/decoder.js';
 
 const logger = getLogger();
 
@@ -130,7 +131,8 @@ export class ImapClient {
           chunks.push(chunk);
         }
         const fullContent = Buffer.concat(chunks).toString('utf-8');
-        message.body.text = this.stripRawHeaders(fullContent);
+        const rawBody = this.stripRawHeaders(fullContent);
+        message.body.text = EmailDecoder.decode(rawBody);
       }
 
       return message;
@@ -142,14 +144,35 @@ export class ImapClient {
   private stripRawHeaders(content: string): string {
     const parts = content.split(/\r?\n\r?\n/);
     if (parts.length > 1) {
-      if (content.includes('Content-Type: multipart')) {
-        const subParts = content.split(/--_NmP-[a-f0-9]+/);
-        const textPart = subParts.find(p => p.includes('Content-Type: text/plain'));
+      // 1. Dynamic Boundary Detection
+      const contentTypeMatch = content.match(/Content-Type: multipart\/.*boundary="?([^";\r\n]+)"?/i);
+      
+      if (contentTypeMatch) {
+        const boundary = contentTypeMatch[1];
+        const subParts = content.split('--' + boundary);
+        
+        // Try to find text/plain part first
+        let textPart = subParts.find(p => p.toLowerCase().includes('content-type: text/plain'));
         if (textPart) {
-          return textPart.split(/\r?\n\r?\n/).slice(1).join('\n\n').split(/--/)[0].trim();
+          return textPart.split(/\r?\n\r?\n/).slice(1).join('\n\n').split('--')[0].trim();
+        }
+
+        // Fallback: Try to find text/html part
+        let htmlPart = subParts.find(p => p.toLowerCase().includes('content-type: text/html'));
+        if (htmlPart) {
+          const rawHtml = htmlPart.split(/\r?\n\r?\n/).slice(1).join('\n\n').split('--')[0].trim();
+          return EmailDecoder.stripHtml(EmailDecoder.decode(rawHtml));
         }
       }
-      return parts.slice(1).join('\n\n').split(/--_NmP/)[0].trim();
+
+      // 2. Non-multipart or fallback
+      const body = parts.slice(1).join('\n\n').split(/--[a-f0-9_-]+/i)[0].trim();
+      
+      if (body.toLowerCase().includes('<html') || body.toLowerCase().includes('<div')) {
+        return EmailDecoder.stripHtml(EmailDecoder.decode(body));
+      }
+      
+      return body;
     }
     return content.trim();
   }

@@ -84,8 +84,8 @@ Add this to your `settings.json`:
 {
   "mcpServers": {
     "mailing-manager": {
-      "command": "npx",
-      "args": ["@tatine13/mcp-manager", "server"],
+      "command": "node",
+      "args": ["/path/to/dist/bin/server.js"],
       "env": {
         "MAILING_MANAGER_UNLOCK_CODE": "your-secure-password",
         "MAILING_MANAGER_SYNC_LIMIT": "50",
@@ -95,6 +95,14 @@ Add this to your `settings.json`:
   }
 }
 ```
+
+---
+
+## 📬 Multi-Account Support
+- **Unlimited email accounts**
+- **Provider Presets**: Gmail, Outlook, Yahoo, iCloud, Fastmail, Custom
+- **Authentication Methods**: App Passwords, Password (**OAuth2 support planned for v1.5**)
+- **Protocols**: IMAP, SMTP with TLS
 
 ---
 

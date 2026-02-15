@@ -1,5 +1,11 @@
 # Changelog - Mailing Manager MCP
 
+## [Unreleased] - v1.5.0
+### Planned
+- **Functional Tasks**: Real logic for `digest`, `cleanup`, and `auto_respond`.
+- **Advanced Decoders**: UTF-8 support for quoted-printable and base64.
+- **Unified Multi-Account Search**: Search across multiple servers in one job.
+
 ## [1.0.0] - 2026-02-15
 ### Initial Public Release (Professional Edition)
 
