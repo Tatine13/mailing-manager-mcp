@@ -5,8 +5,13 @@ node_modules/
 dist/
 *.tsbuildinfo
 
-# Internal Documentation Dev directory
+# Internal Archives and Dev Documentation
+_archs/
 docs/dev/
+
+# Gencodedoc (Internal versioning)
+.gencodedoc/
+.gencodedoc.yaml
 
 # Debug logs
 *.log
@@ -19,6 +24,9 @@ startup_check.log
 err.log
 err_stdio.log
 out.log
+
+# NPM configuration (Security)
+.npmrc
 
 # Operating System files
 .DS_Store
@@ -35,9 +43,6 @@ mailing-manager.db*
 # Test coverage
 coverage/
 
-# Gencodedoc internals
-.gencodedoc/
-
 # Temporary files
 tmp/
 temp_*.txt
@@ -46,3 +51,14 @@ tunnel_url.txt
 serveo_url.txt
 pinggy.log
 tunnel.log
+
+# Root scripts and scratch files (Exclude core configs)
+*.ts
+*.js
+*.cjs
+!src/**/*.ts
+!tests/**/*.ts
+!vitest.config.ts
+!tsconfig.json
+!tsup.config.ts
+!verify_key.ts

@@ -1,35 +1,36 @@
-# Sources
+# Sources and Dev configs
 src/
 tests/
+_archs/
 vitest.config.ts
 tsconfig.json
 tsup.config.ts
+package-lock.json
 
-# Documentation dev
-docs/
+# Gencodedoc
+.gencodedoc/
+.gencodedoc.yaml
+
+# Documentation
+docs/dev/
+docs/ia/
 *.md
 !README.md
+!CHANGELOG.md
 !LICENSE
 
 # Logs and Debug
 *.log
 *.ts
-!src/**/*.ts
-debug_imap.ts
-verify_key.ts
-audit_db.ts
-audit_gemini.ts
-debug_scan.ts
+!dist/**/*.js
+*.js
+*.cjs
 
 # Misc
 .gitignore
 .npmignore
-.gencodedoc/
-.gencodedoc.yaml
-_archs/
-demo_*.cjs
-test_*.js
-test_*.cjs
-requete_initiale.md
-resultat_final.txt
-mcp-mails_tree_code*.md
+.npmrc
+.env
+.env.local
+.DS_Store
+Thumbs.db
