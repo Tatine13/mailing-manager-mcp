@@ -1,0 +1,274 @@
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { ConfigManager } from './config.js';
+import { EventBus, getEventBus } from './event-bus.js';
+import { DatabaseManager } from '../storage/database.js';
+import { EncryptionService } from '../security/encryption.js';
+import { AccountManager } from '../accounts/account-manager.js';
+import { ConnectionPool } from '../email/connection-pool.js';
+import { PersonaManager } from '../personas/persona-manager.js';
+import { DirectiveEngine } from '../directives/directive-engine.js';
+import { TaskEngine } from '../tasks/task-engine.js';
+import { WebhookManager } from '../webhooks/webhook-manager.js';
+import { WebhookServer } from '../webhooks/webhook-server.js';
+import { WebhookDispatcher } from '../webhooks/webhook-dispatcher.js';
+import { SecureInput } from '../secure-input/index.js';
+import { registerAccountTools } from '../tools/account-tools.js';
+import { registerEmailTools } from '../tools/email-tools.js';
+import { registerPersonaTools } from '../tools/persona-tools.js';
+import { registerDirectiveTools } from '../tools/directive-tools.js';
+import { registerTaskTools } from '../tools/task-tools.js';
+import { registerWebhookTools } from '../tools/webhook-tools.js';
+import { createLogger, getLogger } from '../utils/logger.js';
+import { AppConfig } from './types.js';
+
+export class MailingManagerServer {
+  private mcpServer: McpServer;
+  private configManager: ConfigManager;
+  private db!: DatabaseManager;
+  private encryption!: EncryptionService;
+  private accountManager!: AccountManager;
+  private connectionPool!: ConnectionPool;
+  private personaManager!: PersonaManager;
+  private directiveEngine!: DirectiveEngine;
+  private taskEngine!: TaskEngine;
+  private webhookManager!: WebhookManager;
+  private webhookServer!: WebhookServer;
+  private webhookDispatcher!: WebhookDispatcher;
+  private secureInput!: SecureInput;
+  private eventBus: EventBus;
+  private config!: AppConfig;
+
+  constructor(dataDir?: string) {
+    this.mcpServer = new McpServer({
+      name: 'mailing-manager',
+      version: '1.0.0',
+    });
+    this.configManager = new ConfigManager(dataDir);
+    this.eventBus = getEventBus();
+  }
+
+  async initialize(): Promise<void> {
+    // Load config
+    this.config = await this.configManager.load();
+
+    // Init logger
+    createLogger({
+      level: this.config.logging.level,
+      file: this.config.logging.file
+    });
+
+    const logger = getLogger();
+    logger.info('Initializing Mailing Manager MCP Server');
+
+    // Init database
+    this.db = new DatabaseManager(this.configManager.getDatabasePath());
+    await this.db.initialize();
+
+    // Init encryption
+    this.encryption = new EncryptionService();
+
+    // Init secure input
+    const isRemote = !process.stdout.isTTY || !!process.env.REMOTE_MODE;
+    this.secureInput = new SecureInput(isRemote ? 'remote' : 'local');
+
+    // Check if master key exists, if not, prompt for setup
+    await this.ensureMasterKey();
+
+    // Init managers
+    this.accountManager = new AccountManager(this.db, this.encryption);
+    this.connectionPool = new ConnectionPool(this.accountManager);
+    this.personaManager = new PersonaManager(this.db);
+    this.directiveEngine = new DirectiveEngine(this.db);
+    this.taskEngine = new TaskEngine(this.db);
+    this.webhookManager = new WebhookManager(this.db, this.encryption);
+    this.webhookDispatcher = new WebhookDispatcher(this.webhookManager, this.encryption);
+
+    // Register MCP tools
+    this.registerAllTools();
+
+    // Setup event bridges
+    this.setupEventBridges();
+
+    logger.info('Server initialized');
+  }
+
+  private async ensureMasterKey(): Promise<void> {
+    const logger = getLogger();
+    const row = this.db.getDb().prepare('SELECT * FROM master_key WHERE id = 1').get() as any;
+    const envMasterKey = process.env.MAILING_MANAGER_MASTER_KEY;
+
+    if (!row) {
+      // First time setup
+      logger.info('No master key found. Starting first-time setup.');
+      
+      let password = envMasterKey;
+      if (!password) {
+         password = await this.secureInput.masterKeySetup();
+      } else {
+         logger.info('Using master key from environment variable for setup.');
+      }
+
+      const { key, salt, config: derivationConfig } = await this.encryption.deriveMasterKey(password);
+      const hash = await this.encryption.hashMasterKey(password, salt);
+
+      this.db.getDb().prepare(`
+        INSERT INTO master_key (id, salt, hash, derivation_config, created_at, updated_at)
+        VALUES (1, ?, ?, ?, ?, ?)
+      `).run(
+        salt, hash, JSON.stringify(derivationConfig),
+        new Date().toISOString(), new Date().toISOString()
+      );
+
+      this.encryption.setMasterKey(key);
+      logger.info('Master key created and set');
+    } else {
+      // Unlock existing
+      let password = envMasterKey;
+      
+      if (!password) {
+        password = await this.secureInput.masterKeyUnlock();
+      } else {
+        logger.info('Using master key from environment variable for unlock.');
+      }
+
+      const isValid = await this.encryption.verifyMasterKey(password, row.hash);
+
+      if (!isValid) {
+        throw new Error('Invalid master password (verified against DB hash)');
+      }
+
+      const { key } = await this.encryption.deriveMasterKey(password, row.salt);
+      this.encryption.setMasterKey(key);
+      logger.info('Master key unlocked');
+    }
+  }
+
+  private registerAllTools(): void {
+    registerAccountTools(
+      this.mcpServer,
+      this.accountManager,
+      this.connectionPool,
+      this.secureInput
+    );
+
+    registerEmailTools(
+      this.mcpServer,
+      this.connectionPool
+    );
+
+    registerPersonaTools(
+      this.mcpServer,
+      this.personaManager
+    );
+
+    registerDirectiveTools(
+      this.mcpServer,
+      this.directiveEngine,
+      this.connectionPool
+    );
+
+    registerTaskTools(
+      this.mcpServer,
+      this.taskEngine
+    );
+
+    registerWebhookTools(
+      this.mcpServer,
+      this.webhookManager
+    );
+  }
+
+  private setupEventBridges(): void {
+    // When an email event occurs, dispatch to outbound webhooks
+    const emailEvents: Array<keyof import('./types.js').EventMap> = [
+      'email.received', 'email.sent', 'email.deleted',
+      'email.moved', 'email.flagged'
+    ];
+
+    for (const event of emailEvents) {
+      this.eventBus.on(event, (data) => {
+        this.webhookDispatcher.dispatch(event as any, data as any).catch(err => {
+          getLogger().error({ event, error: err }, 'Webhook dispatch error');
+        });
+      });
+    }
+
+    // When a webhook is received, process its actions
+    this.eventBus.on('webhook.received', async (event) => {
+      const webhook = this.webhookManager.getInbound(event.webhookId);
+      if (!webhook) return;
+
+      for (const action of webhook.actions) {
+        try {
+          switch (action.type) {
+            case 'trigger_task':
+              await this.taskEngine.execute(action.parameters.taskId as string);
+              break;
+            case 'notify':
+              await this.webhookDispatcher.dispatch('email.received', event.payload as any);
+              break;
+            // Add more action handlers
+          }
+        } catch (error) {
+          getLogger().error({
+            webhookId: webhook.id,
+            action: action.type,
+            error
+          }, 'Webhook action failed');
+        }
+      }
+    });
+  }
+
+  async start(transport: 'stdio' | 'http' | 'both' = 'stdio'): Promise<void> {
+    const logger = getLogger();
+
+    // Start MCP transport
+    if (transport === 'stdio' || transport === 'both') {
+      const stdioTransport = new StdioServerTransport();
+      await this.mcpServer.connect(stdioTransport);
+      logger.info('MCP stdio transport connected');
+    }
+
+    // Start webhook server
+    if (this.config.webhooks.enabled) {
+      this.webhookServer = new WebhookServer(
+        this.config.webhooks,
+        this.webhookManager,
+        this.encryption
+      );
+      await this.webhookServer.start();
+    }
+
+    // Start task scheduler
+    if (this.config.tasks.schedulerEnabled) {
+      this.taskEngine.startScheduler();
+    }
+
+    // Start connection pool cleanup
+    this.connectionPool.start();
+
+    logger.info({
+      transport,
+      webhooksEnabled: this.config.webhooks.enabled,
+      schedulerEnabled: this.config.tasks.schedulerEnabled
+    }, 'Mailing Manager MCP Server started');
+  }
+
+  async stop(): Promise<void> {
+    const logger = getLogger();
+
+    this.taskEngine.stopScheduler();
+    this.connectionPool.stop();
+
+    if (this.webhookServer) {
+      await this.webhookServer.stop();
+    }
+
+    this.encryption.clearMasterKey();
+    this.db.close();
+
+    logger.info('Server stopped');
+  }
+}

@@ -1,0 +1,45 @@
+# Dependency directories
+node_modules/
+
+# Build artifacts
+dist/
+*.tsbuildinfo
+
+# Debug logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+debug_decrypted.log
+startup_debug.log
+startup_check.log
+err.log
+err_stdio.log
+out.log
+
+# Operating System files
+.DS_Store
+Thumbs.db
+
+# Local database and config (User specific)
+.mailing-manager/
+mailing-manager.db*
+
+# Environment variables
+.env
+.env.local
+
+# Test coverage
+coverage/
+
+# Gencodedoc internals
+.gencodedoc/
+
+# Temporary files
+tmp/
+temp_*.txt
+demo_url.txt
+tunnel_url.txt
+serveo_url.txt
+pinggy.log
+tunnel.log

@@ -1,0 +1,35 @@
+# Sources
+src/
+tests/
+vitest.config.ts
+tsconfig.json
+tsup.config.ts
+
+# Documentation dev
+docs/
+*.md
+!README.md
+!LICENSE
+
+# Logs and Debug
+*.log
+*.ts
+!src/**/*.ts
+debug_imap.ts
+verify_key.ts
+audit_db.ts
+audit_gemini.ts
+debug_scan.ts
+
+# Misc
+.gitignore
+.npmignore
+.gencodedoc/
+.gencodedoc.yaml
+_archs/
+demo_*.cjs
+test_*.js
+test_*.cjs
+requete_initiale.md
+resultat_final.txt
+mcp-mails_tree_code*.md

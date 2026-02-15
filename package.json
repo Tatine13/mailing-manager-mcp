@@ -1,0 +1,90 @@
+{
+  "name": "@mailing-ai/mcp-manager",
+  "version": "1.0.0",
+  "description": "Universal MCP Server for Multi-Account Email Management with Personas, Tasks, and FTS5 Local Memory",
+  "author": "Tatine13",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Tatine13/mailing-manager-mcp.git"
+  },
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "mailing-manager": "./dist/bin/cli.js",
+    "mailing-manager-mcp": "./dist/bin/server.js"
+  },
+  "exports": {
+    ".": "./dist/index.js",
+    "./setup": "./dist/bin/cli.js",
+    "./server": "./dist/bin/server.js"
+  },
+  "scripts": {
+    "dev": "tsx src/bin/server.ts",
+    "dev:http": "tsx src/bin/server.ts --transport http",
+    "dev:both": "tsx src/bin/server.ts --transport both",
+    "setup": "tsx src/bin/cli.ts setup",
+    "build": "tsup",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "lint": "eslint src/",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build && npm run test"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "imapflow": "^1.0.170",
+    "nodemailer": "^6.9.16",
+    "googleapis": "^144.0.0",
+    "@azure/msal-node": "^2.16.0",
+    "argon2": "^0.41.1",
+    "better-sqlite3": "^11.7.0",
+    "inquirer": "^12.3.0",
+    "express": "^4.21.0",
+    "croner": "^9.0.0",
+    "pino": "^9.6.0",
+    "pino-pretty": "^13.0.0",
+    "handlebars": "^4.7.8",
+    "zod": "^3.24.0",
+    "commander": "^13.0.0",
+    "open": "^10.1.0"
+  },
+  "optionalDependencies": {
+    "keytar": "^7.9.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/express": "^5.0.0",
+    "@types/nodemailer": "^6.4.17",
+    "typescript": "^5.7.0",
+    "tsup": "^8.3.0",
+    "tsx": "^4.19.0",
+    "vitest": "^2.1.0",
+    "@vitest/coverage-v8": "^2.1.0",
+    "eslint": "^9.0.0",
+    "@typescript-eslint/eslint-plugin": "^8.0.0",
+    "@typescript-eslint/parser": "^8.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "files": [
+    "dist/",
+    "migrations/",
+    "config/",
+    "README.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "mcp",
+    "email",
+    "imap",
+    "smtp",
+    "model-context-protocol",
+    "ai",
+    "automation"
+  ]
+}
