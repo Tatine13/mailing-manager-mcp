@@ -6,7 +6,7 @@ import { AppConfig } from './types.js';
 const DEFAULT_DATA_DIR = path.join(os.homedir(), '.mailing-manager');
 
 const DEFAULT_CONFIG: AppConfig = {
-  version: '1.0.7',
+  version: '1.0.1',
   dataDir: DEFAULT_DATA_DIR,
   transport: 'stdio',
   http: {
