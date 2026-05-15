@@ -118,7 +118,7 @@ export class ImapClient {
         source: true,
         size: true,
         uid: true
-      });
+      }, { uid: true });
 
       if (!msg) return null;
 
@@ -248,6 +248,86 @@ export class ImapClient {
       logger.error({ error, email: this.account.email }, 'IMAP connection test failed');
       try { await this.disconnect(); } catch {}
       return false;
+    }
+  }
+
+  async getThreadEmails(folder: string, messageId: string): Promise<EmailMessage[]> {
+    const client = this.ensureConnected();
+    const lock = await client.getMailboxLock(folder);
+
+    try {
+      const threadEmails: EmailMessage[] = [];
+      
+      const targetEmail = await client.fetchOne(String(messageId), {
+        envelope: true,
+        flags: true,
+        bodyStructure: true,
+        headers: ['in-reply-to', 'references'],
+        uid: true
+      }, { uid: true });
+
+      if (!targetEmail) return [];
+
+      const envelope = targetEmail.envelope || {};
+      const inReplyTo = targetEmail.headers?.get?.('in-reply-to') || envelope.inReplyTo || null;
+      const referencesHeader = targetEmail.headers?.get?.('references') || envelope.references || '';
+      
+      const allMessageIds = new Set<string>();
+      allMessageIds.add(envelope.messageId || '');
+      
+      if (referencesHeader) {
+        const refs = referencesHeader.split(/\s+/).filter((id: string) => id.trim());
+        refs.forEach((id: string) => allMessageIds.add(id.trim()));
+      }
+      
+      if (inReplyTo) {
+        allMessageIds.add(inReplyTo.trim());
+      }
+
+      if (allMessageIds.size <= 1) {
+        return [this.mapMessage(targetEmail, folder)];
+      }
+
+      const totalMessages = client.mailbox?.exists || 0;
+      if (totalMessages === 0) return [];
+
+      const searchSequence = `1:${totalMessages}`;
+      
+      for await (const msg of client.fetch(searchSequence, {
+        envelope: true,
+        flags: true,
+        bodyStructure: true,
+        headers: ['in-reply-to', 'references', 'message-id'],
+        uid: true
+      })) {
+        const msgEnvelope = msg.envelope || {};
+        const msgId = msgEnvelope.messageId || '';
+        const msgInReplyTo = msg.headers?.get?.('in-reply-to') || msgEnvelope.inReplyTo || '';
+        const msgReferences = msg.headers?.get?.('references') || msgEnvelope.references || '';
+        
+        const msgAllIds = new Set<string>();
+        msgAllIds.add(msgId);
+        if (msgInReplyTo) msgAllIds.add(msgInReplyTo.trim());
+        if (msgReferences) {
+          msgReferences.split(/\s+/).filter((id: string) => id.trim()).forEach((id: string) => msgAllIds.add(id.trim()));
+        }
+        
+        for (const id of allMessageIds) {
+          if (msgAllIds.has(id)) {
+            const emailMsg = this.mapMessage(msg, folder);
+            emailMsg.inReplyTo = msgInReplyTo || undefined;
+            emailMsg.references = msgReferences ? msgReferences.split(/\s+/).filter((r: string) => r.trim()) : undefined;
+            threadEmails.push(emailMsg);
+            break;
+          }
+        }
+      }
+
+      threadEmails.sort((a, b) => a.date.getTime() - b.date.getTime());
+
+      return threadEmails;
+    } finally {
+      lock.release();
     }
   }
 

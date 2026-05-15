@@ -164,18 +164,22 @@ export function registerEmailTools(
           sender: email.from.address
         });
 
-        const text = [
-          `From: ${email.from.name || ''} <${email.from.address}>`,
-          `To: ${email.to.map(t => t.address).join(', ')}`,
-          email.cc ? `CC: ${email.cc.map(c => c.address).join(', ')}` : '',
-          `Subject: ${email.subject}`,
-          `Date: ${email.date.toISOString()}`,
-          `Flags: ${email.flags.join(', ') || 'none'}`,
-          `Attachments: ${email.attachments.length}`,
-          '',
-          '--- Body ---',
-          email.body.text || email.body.html || '(empty)'
-        ].filter(Boolean).join('\n');
+    const attachList = email.attachments.length > 0 
+      ? email.attachments.map((a: any) => `  • ${a.filename} (${a.contentType}, ${a.size || '?'} bytes) [part: ${a.part}]`).join('\n')
+      : '  (none)';
+    
+    const text = [
+      `From: ${email.from.name || ''} <${email.from.address}>`,
+      `To: ${email.to.map(t => t.address).join(', ')}`,
+      email.cc ? `CC: ${email.cc.map(c => c.address).join(', ')}` : '',
+      `Subject: ${email.subject}`,
+      `Date: ${email.date.toISOString()}`,
+      `Flags: ${email.flags.join(', ') || 'none'}`,
+      `Attachments (${email.attachments.length}):\n${attachList}`,
+      '',
+      '--- Body ---',
+      email.body.text || email.body.html || '(empty)'
+    ].filter(Boolean).join('\n');
 
         return { content: [{ type: 'text', text }] };
       } catch (error) {
@@ -199,13 +203,58 @@ export function registerEmailTools(
       cc: z.array(z.string().email()).optional().describe('CC recipients'),
       bcc: z.array(z.string().email()).optional().describe('BCC recipients'),
       reply_to_id: z.string().optional().describe('Message ID to reply to'),
-      attachments: z.array(z.string()).optional().describe('Array of local file paths to attach')
+      attachments: z.array(z.string()).optional().describe('Array of local file paths to attach'),
+      thread_aware: z.boolean().optional().describe('If true and thread_email_id provided, fetch thread context for smarter replies'),
+      thread_email_id: z.string().optional().describe('Email UID to fetch thread from (use with thread_aware)'),
+      thread_folder: z.string().optional().default('INBOX').describe('Folder to search for thread (default: INBOX)')
     },
-    async ({ account_id, to, subject, body, html, cc, bcc, reply_to_id, attachments }) => {
+    async ({ account_id, to, subject, body, html, cc, bcc, reply_to_id, attachments, thread_aware, thread_email_id, thread_folder }) => {
       if (!isVaultReady()) return { content: [{ type: 'text', text: VAULT_LOCKED_MSG }], isError: true };
       try {
         const fs = await import('fs/promises');
         const path = await import('path');
+
+        let threadInfo = '';
+        if (thread_aware && thread_email_id) {
+          try {
+            const imap = await connectionPool.getImap(account_id);
+            const folder = thread_folder || 'INBOX';
+            
+            const thread = await imap.getThreadEmails(folder, parseInt(thread_email_id, 10));
+            if (thread.length > 1) {
+              const participants = new Set<string>();
+              thread.forEach(e => {
+                participants.add(e.from.address);
+                e.to.forEach(t => participants.add(t.address));
+              });
+              
+              // Fetch full bodies for context
+              const threadWithBodies = await Promise.all(
+                thread.map(async (e) => {
+                  if (!e.body.text) {
+                    try {
+                      const fullEmail = await imap.readEmail(folder, parseInt(e.id, 10));
+                      return { ...e, body: fullEmail?.body || { text: '(no content)' } };
+                    } catch {
+                      return e;
+                    }
+                  }
+                  return e;
+                })
+              );
+              
+              threadInfo = `\n📎 THREAD CONTEXT (${thread.length} messages)\n`;
+              threadInfo += `Participants: ${Array.from(participants).join(', ')}\n`;
+              threadInfo += `Thread started: ${thread[0].date.toLocaleString()}\n\n`;
+              threadInfo += threadWithBodies.map((e, i) => 
+                `[${i + 1}] ${e.date.toLocaleString()} - ${e.from.address}:\n${(e.body.text || '(no text)').substring(0, 150)}`
+              ).join('\n\n');
+              threadInfo += `\n📎 END THREAD CONTEXT`;
+            }
+          } catch (threadErr) {
+            // Thread fetch failed, continue without context
+          }
+        }
 
         const attachmentObjects = [];
         if (attachments && attachments.length > 0) {
@@ -223,7 +272,7 @@ export function registerEmailTools(
           accountId: account_id,
           to,
           subject,
-          body,
+          body: threadInfo ? `${threadInfo}\n\n${body}` : body,
           html,
           cc,
           bcc,
@@ -237,13 +286,14 @@ export function registerEmailTools(
           message_id: result.messageId,
           subject: subject,
           recipient: to.join(', '),
-          persona_id: undefined // Could be passed if personaId was in args
+          persona_id: undefined
         });
 
+        const threadMsg = threadInfo ? `\nThread context: ${threadInfo.split('\n').length} lines included` : '';
         return {
           content: [{
             type: 'text',
-            text: `✅ Email sent successfully!\nMessage ID: ${result.messageId}\nTo: ${to.join(', ')}\nAttachments: ${attachmentObjects.length}`
+            text: `✅ Email sent successfully!\nMessage ID: ${result.messageId}\nTo: ${to.join(', ')}\nAttachments: ${attachmentObjects.length}${threadMsg}`
           }]
         };
       } catch (error) {
@@ -368,44 +418,188 @@ export function registerEmailTools(
   );
 
   server.tool(
-    'download_attachment',
-    'Download an email attachment to the local assets folder',
+  'download_attachment',
+  'Download an email attachment to the local assets folder',
+  {
+    account_id: z.string().uuid(),
+    email_id: z.string(),
+    part_id: z.string().describe('Part ID of the attachment (e.g. "2")'),
+    folder: z.string().optional().default('INBOX')
+  },
+  async ({ account_id, email_id, part_id, folder }) => {
+    if (!isVaultReady()) return { content: [{ type: 'text', text: VAULT_LOCKED_MSG }], isError: true };
+    try {
+      const fs = await import('fs/promises');
+      const path = await import('path');
+      const imap = await connectionPool.getImap(account_id);
+
+      const { content, filename } = await imap.downloadAttachment(folder, parseInt(email_id, 10), part_id);
+
+      const targetDir = '/home/fkomp/Bureau/oracle/generated_assets/documents';
+      const targetPath = path.join(targetDir, filename);
+
+      await fs.mkdir(targetDir, { recursive: true });
+      await fs.writeFile(targetPath, content);
+
+      db.logEmailActivity({
+        account_id,
+        action: 'download',
+        message_id: email_id,
+        details: JSON.stringify({ filename, path: targetPath, part: part_id })
+      });
+
+      return {
+        content: [{ type: 'text', text: `✅ Attachment downloaded successfully!\n\nFile: ${filename}\nLocal Path: ${targetPath}` }]
+      };
+    } catch (error) {
+      return {
+        content: [{ type: 'text', text: `❌ Download failed: ${(error as Error).message}` }],
+        isError: true
+      };
+    }
+  }
+  );
+
+  server.tool(
+    'get_sync_status',
+    'Get the synchronization status for an account folder: last synced UID, total emails in local DB, date range.',
     {
-      account_id: z.string().uuid(),
-      email_id: z.string(),
-      part_id: z.string().describe('Part ID of the attachment (e.g. "2")'),
-      folder: z.string().optional().default('INBOX')
+      account_id: z.string().uuid().describe('Account ID'),
+      folder: z.string().optional().default('INBOX').describe('Folder name')
     },
-    async ({ account_id, email_id, part_id, folder }) => {
-      if (!isVaultReady()) return { content: [{ type: 'text', text: VAULT_LOCKED_MSG }], isError: true };
+    async ({ account_id, folder }) => {
       try {
-        const fs = await import('fs/promises');
-        const path = await import('path');
-        const imap = await connectionPool.getImap(account_id);
+        const status = db.getSyncStatus(account_id, folder);
         
-        const { content, filename } = await imap.downloadAttachment(folder, parseInt(email_id, 10), part_id);
-        
-        const targetDir = '/home/fkomp/Bureau/oracle/generated_assets/documents';
-        const targetPath = path.join(targetDir, filename);
-        
-        await fs.mkdir(targetDir, { recursive: true });
-        await fs.writeFile(targetPath, content);
-        
-        db.logEmailActivity({
-          account_id,
-          action: 'download',
-          message_id: email_id,
-          details: JSON.stringify({ filename, path: targetPath, part: part_id })
-        });
+        if (status.totalCount === 0) {
+          return { content: [{ type: 'text', text: `📭 No emails synced for ${folder}.\nUse sync_emails to fetch emails.` }] };
+        }
 
         return {
-          content: [{ type: 'text', text: `✅ Attachment downloaded successfully!\n\nFile: ${filename}\nLocal Path: ${targetPath}` }]
+          content: [{
+            type: 'text',
+            text: `📊 Sync Status for ${folder}:\n\n` +
+                  `• Last synced UID: ${status.lastUid}\n` +
+                  `• Total emails in DB: ${status.totalCount}\n` +
+                  `• Oldest email: ${status.oldestDate || 'N/A'}\n` +
+                  `• Newest email: ${status.newestDate || 'N/A'}`
+          }]
         };
       } catch (error) {
+        return { content: [{ type: 'text', text: `❌ ${(error as Error).message}` }], isError: true };
+      }
+    }
+  );
+
+  server.tool(
+    'reset_sync',
+    'Clear synced emails from local database to force a full re-sync. Use with caution.',
+    {
+      account_id: z.string().uuid().describe('Account ID'),
+      folder: z.string().optional().describe('Folder to reset (default: all folders)')
+    },
+    async ({ account_id, folder }) => {
+      try {
+        const deleted = db.clearSyncedEmails(account_id, folder);
+        const target = folder || 'all folders';
+
+        db.logEmailActivity({
+          account_id,
+          action: 'reset_sync',
+          details: JSON.stringify({ folder: folder || 'all', deleted_count: deleted })
+        });
+
+      return { content: [{ type: 'text', text: `🗑️ Sync reset complete!\n\n• Emails removed: ${deleted}\n• Scope: ${target}\n\nUse sync_emails to fetch fresh emails.` }]
+      };
+    } catch (error) {
+      return { content: [{ type: 'text', text: `❌ ${(error as Error).message}` }], isError: true };
+    }
+  }
+  );
+
+  server.tool(
+    'get_email_thread',
+    'Get all emails in a conversation thread. Returns chronologically ordered emails sharing the same Message-ID, In-Reply-To, or References chain.',
+    {
+      account_id: z.string().uuid().describe('Account ID'),
+      email_id: z.string().describe('Email UID to get thread for'),
+      folder: z.string().optional().default('INBOX').describe('Folder name')
+    },
+    async ({ account_id, email_id, folder }) => {
+      if (!isVaultReady()) return { content: [{ type: 'text', text: VAULT_LOCKED_MSG }], isError: true };
+      try {
+        const imap = await connectionPool.getImap(account_id);
+        const thread = await imap.getThreadEmails(folder, parseInt(email_id, 10));
+
+        if (thread.length === 0) {
+          return { content: [{ type: 'text', text: 'No thread found.' }] };
+        }
+
+        const threadList = thread.map((e, i) => {
+          const arrow = i === thread.length - 1 ? '└─►' : i === 0 ? '┌─►' : '│ ';
+          const replyTo = e.inReplyTo ? `\n    In-Reply-To: ${e.inReplyTo.substring(0, 50)}...` : '';
+          return `${arrow} [${e.date.toISOString()}] ${e.from.address}\n    Subject: ${e.subject}\n    ID: ${e.id}${replyTo}`;
+        }).join('\n\n');
+
         return {
-          content: [{ type: 'text', text: `❌ Download failed: ${(error as Error).message}` }],
-          isError: true
+          content: [{
+            type: 'text',
+            text: `🧵 Email Thread (${thread.length} messages):\n\n${threadList}\n\n---\n💡 Use get_thread_summary to get a condensed version for AI context.`
+          }]
         };
+      } catch (error) {
+        return { content: [{ type: 'text', text: `❌ ${(error as Error).message}` }], isError: true };
+      }
+    }
+  );
+
+  server.tool(
+    'get_thread_summary',
+    'Get a condensed summary of an email thread for AI context. Returns key participants, topic, and message timeline.',
+    {
+      account_id: z.string().uuid().describe('Account ID'),
+      email_id: z.string().describe('Email UID to get thread for'),
+      folder: z.string().optional().default('INBOX').describe('Folder name'),
+      max_tokens: z.number().optional().default(500).describe('Max tokens for summary')
+    },
+    async ({ account_id, email_id, folder, max_tokens }) => {
+      if (!isVaultReady()) return { content: [{ type: 'text', text: VAULT_LOCKED_MSG }], isError: true };
+      try {
+        const imap = await connectionPool.getImap(account_id);
+        const thread = await imap.getThreadEmails(folder, parseInt(email_id, 10));
+
+        if (thread.length === 0) {
+          return { content: [{ type: 'text', text: 'No thread found.' }] };
+        }
+
+        const participants = new Set<string>();
+        thread.forEach(e => {
+          participants.add(e.from.address);
+          e.to.forEach(t => participants.add(t.address));
+        });
+
+        const subject = thread[0]?.subject?.replace(/^Re:\s*/i, '') || '(no subject)';
+        
+        const timeline = thread.map(e => ({
+          date: e.date.toISOString().split('T')[0],
+          from: e.from.name ? `${e.from.name} <${e.from.address}>` : e.from.address,
+          snippet: (e.body.text || e.subject).substring(0, 100)
+        }));
+
+        const summary = `📌 Thread: "${subject}"
+👥 Participants (${participants.size}): ${Array.from(participants).slice(0, 5).join(', ')}${participants.size > 5 ? '...' : ''}
+📊 Messages: ${thread.length}
+📅 Started: ${thread[0].date.toISOString().split('T')[0]}
+📅 Last: ${thread[thread.length - 1].date.toISOString().split('T')[0]}
+
+📋 Timeline:
+${timeline.map(t => `• ${t.date} - ${t.from}: "${t.snippet}..."`).join('\n')}
+
+💡 This summary uses ~${Math.min(max_tokens, 300)} tokens.`;
+
+        return { content: [{ type: 'text', text: summary }] };
+      } catch (error) {
+        return { content: [{ type: 'text', text: `❌ ${(error as Error).message}` }], isError: true };
       }
     }
   );

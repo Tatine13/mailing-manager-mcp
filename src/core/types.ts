@@ -92,6 +92,8 @@ export interface EmailMessage {
   size: number;
   read: boolean;
   flagged: boolean;
+  inReplyTo?: string;
+  references?: string[];
 }
 
 export interface EmailAttachment {

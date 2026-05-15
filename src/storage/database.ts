@@ -183,7 +183,7 @@ export class DatabaseManager {
     const db = this.getDb();
     // Search across all FTS columns
     let sql = `
-      SELECT * FROM email_search 
+      SELECT * FROM email_search
       WHERE email_search MATCH ?
     `;
     const params: any[] = [query];
@@ -201,5 +201,39 @@ export class DatabaseManager {
     params.push(limit);
 
     return db.prepare(sql).all(...params);
+  }
+
+  getSyncStatus(accountId: string, folder: string = 'INBOX'): { lastUid: number; totalCount: number; oldestDate: string | null; newestDate: string | null } {
+    const db = this.getDb();
+    const row = db.prepare(`
+      SELECT 
+        MAX(CAST(message_id AS INTEGER)) as last_uid,
+        COUNT(*) as total_count,
+        MIN(date) as oldest_date,
+        MAX(date) as newest_date
+      FROM email_search 
+      WHERE account_id = ? AND folder = ?
+    `).get(accountId, folder) as { last_uid: number; total_count: number; oldest_date: string | null; newest_date: string | null };
+
+    return {
+      lastUid: row?.last_uid || 0,
+      totalCount: row?.total_count || 0,
+      oldestDate: row?.oldest_date || null,
+      newestDate: row?.newest_date || null
+    };
+  }
+
+  clearSyncedEmails(accountId: string, folder?: string): number {
+    const db = this.getDb();
+    let query = 'DELETE FROM email_search WHERE account_id = ?';
+    const params: any[] = [accountId];
+
+    if (folder) {
+      query += ' AND folder = ?';
+      params.push(folder);
+    }
+
+    const result = db.prepare(query).run(...params);
+    return result.changes;
   }
 }

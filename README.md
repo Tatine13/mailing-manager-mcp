@@ -1,4 +1,4 @@
-# 📧 Mailing Manager MCP (v1.0.0)
+# 📧 Mailing Manager MCP (v1.1.0)
 
 <div align="center">
 
@@ -35,10 +35,18 @@ Don't let your AI drown in tokens. Mailing Manager syncs your emails to a **Loca
 *   **Attachment Awareness**: The AI sees what's available to download without fetching binaries.
 
 ### 🔄 Delta Synchronization
-Intelligent incremental sync logic that only fetches what's new. 
+Intelligent incremental sync logic that only fetches what's new.
 *   **Performance**: Syncs newest first and stops at the last known email.
-*   **Control**: Configurable limits (Default 20, Max 100 per session).
-*   **Auto-Sync**: Support for automatic sync on startup.
+*   **Control**: Configurable limits (Default 30, Max 100 per session).
+*   **Sync Status**: View last synced UID, total count, and date range with `get_sync_status`.
+*   **Reset Sync**: Clear local cache and force full re-sync with `reset_sync`.
+
+### 🧵 Thread-Aware Intelligence (v1.1.0)
+Smart conversation threading for context-rich AI replies:
+*   **Thread Detection**: Auto-detects conversations via `Message-ID`, `In-Reply-To`, and `References` headers.
+*   **Thread Fetching**: `get_email_thread` retrieves all emails in a conversation chronologically.
+*   **Thread Summary**: `get_thread_summary` generates condensed summaries (key participants, topic, timeline).
+*   **Auto-Context Injection**: Reply with `thread_aware: true` to automatically inject thread history into your reply body.
 
 ### 📜 360° Activity Audit
 Full transparency for both the user and the AI. Every action is logged in a dedicated activity journal:
@@ -123,7 +131,7 @@ Add Mailing Manager to your MCP client (Gemini CLI, Claude Desktop, or Cursor).
 
 ---
 
-## 🛠️ Available Tools (34)
+## 🛠️ Available Tools (38)
 
 ### 👤 Account & Provider Management
 | Tool | Description |
@@ -141,8 +149,10 @@ Add Mailing Manager to your MCP client (Gemini CLI, Claude Desktop, or Cursor).
 |------|-------------|
 | `list_emails` | List emails from an account folder. |
 | `read_email` | Read full clean content (No Base64 spam). |
-| `send_email` | Send email (supports local attachments). |
+| `send_email` | Send email (supports local attachments, thread-aware replies). |
 | `search_emails` | Search emails across folders (Online). |
+| `get_email_thread` | Get all emails in a conversation thread (via Message-ID/References). |
+| `get_thread_summary` | Get a condensed thread summary for AI context. |
 | `move_email` | Move an email to another folder. |
 | `delete_email` | Delete an email. |
 | `download_attachment` | Download attachment to local assets. |
@@ -152,6 +162,8 @@ Add Mailing Manager to your MCP client (Gemini CLI, Claude Desktop, or Cursor).
 |------|-------------|
 | `sync_emails` | Pull recent emails into local FTS5 database. |
 | `search_local_emails` | Fast offline search in synced emails (FTS5). |
+| `get_sync_status` | View sync state (last UID, total count, date range). |
+| `reset_sync` | Clear local cache and force full re-sync. |
 | `get_email_history` | History of all actions (read, sent, sync, download). |
 | `get_server_info` | Get server version and environment info. |
 
